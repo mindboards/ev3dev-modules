@@ -1,4 +1,7 @@
 /*
+ * Copyright (c) 2013-2013 - Ralph Hempel - based on original code attributed
+ *                                          to the copyright holder(s) below:
+ *
  * LEGO® MINDSTORMS EV3
  *
  * Copyright (C) 2010-2013 The LEGO Group
@@ -27,6 +30,68 @@
  *-  \subpage UiModuleMemory
  *-  \subpage UiModuleResources
  *
+ *  The standard LEGO UI driver accepts a single character between '0' and '9'.
+ *  The ASCII character '0' is actually 0x30, and '9 is 0x39 - these numbers will
+ *  be important shortly.
+ *
+ *  The Flash pattern is 250mS on, 250mS off
+ *  The Pulse pattern is 150mS on, 50mS off, 150mS on, 650mS off
+ *
+ *  This range of inputs allows for the following 10 standard patterns, the
+ *  value on the left is the raw HEX value of the byte to write
+ *
+ *  0x30 - Steady Black (off)
+ *  0x31 - Steady Green
+ *  0x32 - Steady Red
+ *  0x33 - Steady Orange
+ *  0x34 - Flash  Green
+ *  0x35 - Flash  Red
+ *  0x36 - Flash  Orange
+ *  0x37 - Pulse  Green
+ *  0x38 - Pulse  Red
+ *  0x39 - Pulse  Orange
+ *
+ * So this is pretty neat, but can we do better? Yes, it turns out that we can
+ * get more interesting flash patterns because the left and right LEDs are
+ * independently controllable!
+ *
+ * There are still 3 underlying bit patterns, steady, flash, and pulse. Think
+ * of them as 20 bits of on/off data, times 50 msec per interval (which is
+ * exactly how they are implemented:
+ *
+ * Steady : 0000 0000 0000 0000 0000
+ * Flash  : 0000 0111 1100 0001 1111
+ * Pulse  : 0000 0000 0001 1100 0111
+ *
+ * We'll define 4 LED colours, which fit neatly into 2 bits each:
+ *
+ * Black : 00
+ * Green : 01
+ * Red   : 10
+ * Orange: 11
+ *
+ * We can then put those 2 bits into 4 positions in a byte, as follows:
+ *
+ * +---------+---------+
+ * |  Left   |  Right  | LED Position
+ * +----+----+----+----+
+ * |  1 |  0 |  1 |  0 | Bit pattern state
+ * +----+----+----+----+
+ * | 00 | 01 | 10 | 00 | LED Color per state = Black/Green/Red/Black
+ * +----+----+----+----+
+ *
+ * The result would flash the left LED Black/Green and the Right LED Red/Black
+ * which would give the impression of an alternating green/red flash pattern!
+ *
+ * So that fills up the second byte of data, the first byte is either:
+ *
+ * 0x00 - Steady
+ * 0x01 - Flash
+ * 0x02 - Pulse
+ * 0x03 - LEGO - second byte is ignored
+ *
+ * Long story short 0x3. is used for standard LEGO flash patterns
+ * The extended patterns are two bytes wide as described above
  */
 
 
@@ -90,29 +155,29 @@ module_exit(ModuleExit);
 // #endif
 
 int       Hw = 0;
-// 
-// enum      UiLedPins
-// {
-//   DIODE0,
-//   DIODE1,
-//   DIODE2,
-//   DIODE3,
-//   DIODE4,
-//   DIODE5,
-//   LED_PINS
-// };
-// 
-// enum      UiButPins
-// {
-//   BUT0,     // UP
-//   BUT1,     // ENTER
-//   BUT2,     // DOWN
-//   BUT3,     // RIGHT
-//   BUT4,     // LEFT
-//   BUT5,     // BACK
-//   BUT_PINS
-// };
-// 
+
+enum      UiLedPins
+{
+  DIODE0,
+  DIODE1,
+  DIODE2,
+  DIODE3,
+  DIODE4,
+  DIODE5,
+  LED_PINS
+};
+
+enum      UiButPins
+{
+  BUT0,     // UP
+  BUT1,     // ENTER
+  BUT2,     // DOWN
+  BUT3,     // RIGHT
+  BUT4,     // LEFT
+  BUT5,     // BACK
+  BUT_PINS
+};
+
 // 
 // INPIN     UiLedPin[LED_PINS];
 // 
@@ -205,10 +270,10 @@ int       Hw = 0;
 //   [EP2]       =   EP2_UiButPin,         //  EP2     platform
 // };
 
-#define EV3_DIODE_0_PIN		GPIO_TO_PIN(6, 7 )
-#define EV3_DIODE_1_PIN		GPIO_TO_PIN(6, 12)
+#define EV3_DIODE_0_PIN		GPIO_TO_PIN(6, 12)
+#define EV3_DIODE_1_PIN		GPIO_TO_PIN(6, 14)
 #define EV3_DIODE_2_PIN		GPIO_TO_PIN(6, 13)
-#define EV3_DIODE_3_PIN		GPIO_TO_PIN(6, 14)
+#define EV3_DIODE_3_PIN		GPIO_TO_PIN(6,  7)
 
 static const int legoev3_led_pins[]  = {
 	EV3_DIODE_0_PIN,
@@ -218,7 +283,7 @@ static const int legoev3_led_pins[]  = {
 };
 
 #define EV3_BUTTON_0_PIN		GPIO_TO_PIN(7, 15)
-#define EV3_BUTTON_1_PIN		GPIO_TO_PIN(0, 1 )
+#define EV3_BUTTON_1_PIN		GPIO_TO_PIN(1, 13)
 #define EV3_BUTTON_2_PIN		GPIO_TO_PIN(7, 14)
 #define EV3_BUTTON_3_PIN		GPIO_TO_PIN(7, 12)
 #define EV3_BUTTON_4_PIN		GPIO_TO_PIN(6, 6 )
@@ -230,7 +295,11 @@ static const int legoev3_button_pins[]  = {
         EV3_BUTTON_2_PIN,
         EV3_BUTTON_3_PIN,
         EV3_BUTTON_4_PIN,
-        EV3_BUTTON_5_PIN,
+        EV3_BUTTON_5_PIN
+};
+
+static const short legoev3_gpio_pins[] = {
+	-1
 };
 
 #define PROCFS_MAX_SIZE		512
@@ -246,39 +315,39 @@ static struct proc_dir_entry *procfs_file;
 
 //*****************************************************************************
 
-
-// static    void      __iomem *GpioBase;
 // 
-// void      SetGpio(int Pin)
-// {
-//   int     Tmp = 0;
-//   void    __iomem *Reg;
+//  static    void      __iomem *GpioBase;
+//  
+//  void      SetGpio(int Pin)
+//  {
+//    int     Tmp = 0;
+//    void    __iomem *Reg;
+//  
+//    if (Pin >= 0)
+//    {
+//      while ((MuxRegMap[Tmp].Pin != -1) && (MuxRegMap[Tmp].Pin != Pin))
+//      {
+//        Tmp++;
+//      }
+//      if (MuxRegMap[Tmp].Pin == Pin)
+//      {
+//        Reg   =  da8xx_syscfg0_base + 0x120 + (MuxRegMap[Tmp].MuxReg << 2);
+//  
+//        *(u32*)Reg &=  MuxRegMap[Tmp].Mask;
+//        *(u32*)Reg |=  MuxRegMap[Tmp].Mode;
+//  
+// // #ifdef DEBUG
+//        printk("    GP%d_%-2d  0x%08X and 0x%08X or 0x%08X\n -> 0x%08X",(Pin >> 4),(Pin & 0x0F),(u32)Reg, MuxRegMap[Tmp].Mask, MuxRegMap[Tmp].Mode), *(u32*)Reg;
+// // #endif
+//  
+//      }
+//      else
+//      {
+//        printk("*   GP%d_%-2d  ********* ERROR not found *********\n",(Pin >> 4),(Pin & 0x0F));
+//      }
+//    }
+//  }
 // 
-//   if (Pin >= 0)
-//   {
-//     while ((MuxRegMap[Tmp].Pin != -1) && (MuxRegMap[Tmp].Pin != Pin))
-//     {
-//       Tmp++;
-//     }
-//     if (MuxRegMap[Tmp].Pin == Pin)
-//     {
-//       Reg   =  da8xx_syscfg0_base + 0x120 + (MuxRegMap[Tmp].MuxReg << 2);
-// 
-//       *(u32*)Reg &=  MuxRegMap[Tmp].Mask;
-//       *(u32*)Reg |=  MuxRegMap[Tmp].Mode;
-// 
-//   #ifdef DEBUG
-//       printk("    GP%d_%-2d  0x%08X and 0x%08X or 0x%08X\n",(Pin >> 4),(Pin & 0x0F),(u32)Reg, MuxRegMap[Tmp].Mask, MuxRegMap[Tmp].Mode);
-//   #endif
-// 
-//     }
-//     else
-//     {
-//       printk("*   GP%d_%-2d  ********* ERROR not found *********\n",(Pin >> 4),(Pin & 0x0F));
-//     }
-//   }
-// }
-
 
 void      InitGpio(void)
 {
@@ -332,21 +401,32 @@ void      InitGpio(void)
 //     }
 //   }
 
+  /* Support for EV3 UI LEDs and BUTTONs */
+  ret = davinci_cfg_reg_list(legoev3_gpio_pins);
+  if (ret)
+  	pr_warning("da850_evm_init: GPIO mux setup failed:"
+						" %d\n", ret);
+
   for (Pin = 0;Pin < NO_OF_LEDS;Pin++) {
-    gpio_request(          legoev3_led_pins[Pin], "ev3_diode");
-    gpio_set_value(        legoev3_led_pins[Pin], 0          );
-    gpio_direction_output( legoev3_led_pins[Pin], 0          );
+    printk(KERN_ALERT "LED Pin %d is %d\n", Pin, legoev3_led_pins[Pin] );
+    ret = gpio_request(          legoev3_led_pins[Pin], "ev3_diode");
+    if ( ret ) printk(KERN_ALERT "LED Pin %d can't allocate! - %d", Pin, ret );
+    gpio_direction_output( legoev3_led_pins[Pin], 0    );
   }
 
   for (Pin = 0;Pin < NO_OF_BUTTONS;Pin++) {
-    gpio_request(          legoev3_button_pins[Pin], "ev3_button");
-    gpio_set_value(        legoev3_button_pins[Pin], 0           );
-    gpio_direction_output( legoev3_button_pins[Pin], 0           );
+    printk(KERN_ALERT "BUT Pin %d is %d\n", Pin, legoev3_button_pins[Pin] );
+    ret = gpio_request(          legoev3_button_pins[Pin], "ev3_button");
+    if ( ret ) printk(KERN_ALERT "BUT Pin %d can't allocate! - %d", Pin, ret );
+    gpio_direction_output( legoev3_button_pins[Pin], 0 );
+    gpio_direction_input(  legoev3_button_pins[Pin]    );
   }
 // 
 //   // lock
 //   REGLock;
 }
+
+
 
 // DEVICE1 ********************************************************************
 
@@ -379,21 +459,55 @@ static    ktime_t        Device2Time;
                                         }
 
 
-ULONG     LEDPATTERNDATA[NO_OF_LEDS + 1][LEDPATTERNS] =
-{ //  LED_BLACK   LED_GREEN   LED_RED    LED_ORANGE           LED_GREEN_FLASH                     LED_RED_FLASH                     LED_ORANGE_FLASH                      LED_GREEN_PULSE                       LED_RED_PULSE                      LED_ORANGE_PULSE
-  {  0x00000000, 0x00000000, 0xFFFFFFFF, 0xFFFFFFFF, 0b00000000000000000000000000000000, 0b00000000000000000111110000011111, 0b00000000000000000111110000011111, 0b00000000000000000000000000000000, 0b00000000000000000000000001110111, 0b00000000000000000000000001110111 }, // RR
-  {  0x00000000, 0xFFFFFFFF, 0x00000000, 0xFFFFFFFF, 0b00000000000000000111110000011111, 0b00000000000000000000000000000000, 0b00000000000000000111110000011111, 0b00000000000000000000000001110111, 0b00000000000000000000000000000000, 0b00000000000000000000000001110111 }, // RG
-  {  0x00000000, 0x00000000, 0xFFFFFFFF, 0xFFFFFFFF, 0b00000000000000000000000000000000, 0b00000000000000000111110000011111, 0b00000000000000000111110000011111, 0b00000000000000000000000000000000, 0b00000000000000000000000001110111, 0b00000000000000000000000001110111 }, // LR
-  {  0x00000000, 0xFFFFFFFF, 0x00000000, 0xFFFFFFFF, 0b00000000000000000111110000011111, 0b00000000000000000000000000000000, 0b00000000000000000111110000011111, 0b00000000000000000000000001110111, 0b00000000000000000000000000000000, 0b00000000000000000000000001110111 }, // LG
-  { 0 }
-};
-
-
+// ULONG     LEDPATTERNDATA[NO_OF_LEDS + 1][LEDPATTERNS] =
+// { //  LED_BLACK   LED_GREEN   LED_RED    LED_ORANGE           LED_GREEN_FLASH                     LED_RED_FLASH                     LED_ORANGE_FLASH                      LED_GREEN_PULSE                       LED_RED_PULSE                      LED_ORANGE_PULSE
+//   {  0x00000000, 0x00000000, 0xFFFFFFFF, 0xFFFFFFFF, 0b00000000000000000000000000000000, 0b00000000000000000111110000011111, 0b00000000000000000111110000011111, 0b00000000000000000000000000000000, 0b00000000000000000000000001110111, 0b00000000000000000000000001110111 }, // RR
+//   {  0x00000000, 0xFFFFFFFF, 0x00000000, 0xFFFFFFFF, 0b00000000000000000111110000011111, 0b00000000000000000000000000000000, 0b00000000000000000111110000011111, 0b00000000000000000000000001110111, 0b00000000000000000000000000000000, 0b00000000000000000000000001110111 }, // RG
+//   {  0x00000000, 0x00000000, 0xFFFFFFFF, 0xFFFFFFFF, 0b00000000000000000000000000000000, 0b00000000000000000111110000011111, 0b00000000000000000111110000011111, 0b00000000000000000000000000000000, 0b00000000000000000000000001110111, 0b00000000000000000000000001110111 }, // LR
+//   {  0x00000000, 0xFFFFFFFF, 0x00000000, 0xFFFFFFFF, 0b00000000000000000111110000011111, 0b00000000000000000000000000000000, 0b00000000000000000111110000011111, 0b00000000000000000000000001110111, 0b00000000000000000000000000000000, 0b00000000000000000000000001110111 }, // LG
+//   { 0 }
+// };
+// 
+// 
 UBYTE     PatternBlock    = 0;          // Block pattern update
 UBYTE     PatternBits     = 20;         // Pattern bits
 UBYTE     PatternBit      = 0;          // Pattern bit pointer
-ULONG     ActPattern[NO_OF_LEDS];
-ULONG     TmpPattern[NO_OF_LEDS];
+// ULONG     ActPattern[NO_OF_LEDS];
+// ULONG     TmpPattern[NO_OF_LEDS];
+
+const ULONG SteadyPattern = 0x00FFFFF;
+const ULONG FlashPattern  = 0x0007C1F;
+const ULONG PulsePattern  = 0x0000077;
+
+ULONG     Pattern         = 0x00000000;
+ULONG     PatternMask     = 0x00000000;
+
+ULONG     OnPattern[ NO_OF_LEDS];
+ULONG     OffPattern[NO_OF_LEDS];
+
+#define LEFT_BLACK_ON    (0x00)
+#define LEFT_GREEN_ON    (0x40)
+#define LEFT_RED_ON      (0x80)
+#define LEFT_ORANGE_ON   (0xC0)
+#define LEFT_ON_MASK     (0xC0)
+
+#define LEFT_BLACK_OFF   (0x00)
+#define LEFT_GREEN_OFF   (0x10)
+#define LEFT_RED_OFF     (0x20)
+#define LEFT_ORANGE_OFF  (0x30)
+#define LEFT_OFF_MASK    (0x30)
+
+#define RIGHT_BLACK_ON   (0x00)
+#define RIGHT_GREEN_ON   (0x04)
+#define RIGHT_RED_ON     (0x08)
+#define RIGHT_ORANGE_ON  (0x0C)
+#define RIGHT_ON_MASK    (0x0C)
+
+#define RIGHT_BLACK_OFF  (0x00)
+#define RIGHT_GREEN_OFF  (0x01)
+#define RIGHT_RED_OFF    (0x02)
+#define RIGHT_ORANGE_OFF (0x03)
+#define RIGHT_OFF_MASK   (0x03)
 
 static enum hrtimer_restart Device1TimerInterrupt1(struct hrtimer *pTimer)
 {
@@ -405,22 +519,28 @@ static enum hrtimer_restart Device1TimerInterrupt1(struct hrtimer *pTimer)
   }
   else
   {
+    if (PatternBit == 0) {
+        PatternMask = 0x00000001;
+    }
+
     for (Tmp = 0;Tmp < NO_OF_LEDS;Tmp++)
     {
-      if (PatternBit == 0)
-      {
-        TmpPattern[Tmp]  =  ActPattern[Tmp];
+      if ( Pattern & PatternMask ) { // Use the OnPattern state!
+         if( OnPattern[Tmp] & PatternMask ) {
+             DIODEOn(Tmp);
+         } else {
+             DIODEOff(Tmp);
+         }
+      } else {                      // Use the OffPattern State!
+         if( OffPattern[Tmp] & PatternMask ) {
+             DIODEOff(Tmp);
+         } else {
+             DIODEOn(Tmp);
+         }
       }
-      if ((TmpPattern[Tmp] & 0x00000001))
-      {
-//        DIODEOn(Tmp);
-      }
-      else
-      {
-//        DIODEOff(Tmp);
-      }
-      TmpPattern[Tmp] >>=  1;
     }
+
+    PatternMask <<=  1;
 
     if (++PatternBit >= PatternBits)
     {
@@ -434,22 +554,23 @@ static enum hrtimer_restart Device1TimerInterrupt1(struct hrtimer *pTimer)
   return (HRTIMER_RESTART);
 }
 
+
 static enum hrtimer_restart Device2TimerInterrupt1(struct hrtimer *pTimer)
 {
   UWORD   Tmp;
 
-  for(Tmp = 0;Tmp < NO_OF_BUTTONS;Tmp++)
+  for(Tmp = 0;Tmp < BUT_PINS;Tmp++)
   {
     if (BUTRead(Tmp))
     { // Button active
 
-      procfs_read_buffer[Tmp]  =  "1";
+      procfs_read_buffer[Tmp]  =  1;
 
     }
     else
     { // Button inactive
 
-      procfs_read_buffer[Tmp]  =  "0";
+      procfs_read_buffer[Tmp]  =  0;
 
     }
   }
@@ -601,6 +722,18 @@ static int Device1Init(void)
 //         BUTFloat(Tmp);
 //       }
 
+      Pattern = SteadyPattern;
+
+      OnPattern[ 0]  = ~Pattern;
+      OnPattern[ 1]  = ~Pattern;
+      OnPattern[ 2]  = ~Pattern;
+      OnPattern[ 3]  = ~Pattern;
+
+      OffPattern[0]  = ~Pattern;
+      OffPattern[1]  = ~Pattern;
+      OffPattern[2]  = ~Pattern;
+      OffPattern[3]  = ~Pattern;
+
       // setup ui update timer interrupt
       Device2Time  =  ktime_set(0,10000000);
       hrtimer_init(&Device2Timer,CLOCK_MONOTONIC,HRTIMER_MODE_REL);
@@ -664,15 +797,11 @@ procfile_read(char *buffer,
 {
 	int ret;
 	
-	printk(KERN_INFO "procfile_read (/proc/%s) called\n", PROCFS_NAME);
-	
 	if (offset > 0) {
 		/* we have finished to read, return 0 */
 		ret  = 0;
 	} else {
-		/* fill the buffer, return the buffer size */
-                memcpy( procfs_read_buffer, "it's me, silly!", 16 );
-                procfs_read_buffer_size = 16; 
+                procfs_read_buffer_size = BUT_PINS; 
 		memcpy(buffer, procfs_read_buffer, procfs_read_buffer_size);
 		ret = procfs_read_buffer_size;
 	}
@@ -684,7 +813,8 @@ int
 procfile_write(struct file *file, const char *buffer, unsigned long count,
 		   void *data)
 {
-        unsigned int idx;
+        UBYTE   No;
+        UBYTE   Tmp;
 
 	/* get buffer size */
 	procfs_write_buffer_size = count;
@@ -697,13 +827,141 @@ procfile_write(struct file *file, const char *buffer, unsigned long count,
 		return -EFAULT;
 	}
 
-        for( idx=0; idx<NO_OF_LEDS; ++idx ) {
-            if( procfs_write_buffer[idx] == '0' ) {
-                DIODEOn(idx);
-            } else {
-                DIODEOff(idx);
-            } 
+        if (count >= 2)
+
+        switch (procfs_write_buffer[0] & 0xF0) {
+
+        case 0x00: Pattern = SteadyPattern;
+                   break;
+        case 0x10: Pattern = FlashPattern;
+                   break;
+        case 0x20: Pattern = PulsePattern;
+                   break;
+ 
+        case 0x30: // This is where we handle the LEGO patterns using our
+                   // custom pattern modes - yes it's ugly and can be
+                   // tableized!
+                   // 
+                   switch (procfs_write_buffer[0] & 0x0F) {
+
+                   case 0x00: Pattern = SteadyPattern;
+                              procfs_write_buffer[1] = LEFT_BLACK_ON  | LEFT_BLACK_OFF  | RIGHT_BLACK_ON  | RIGHT_BLACK_OFF;
+                              break;
+                   case 0x01: Pattern = SteadyPattern;
+                              procfs_write_buffer[1] = LEFT_GREEN_ON  | LEFT_GREEN_OFF  | RIGHT_GREEN_ON  | RIGHT_GREEN_OFF;
+                              break;
+                   case 0x02: Pattern = SteadyPattern;
+                              procfs_write_buffer[1] = LEFT_RED_ON    | LEFT_RED_OFF    | RIGHT_RED_ON    | RIGHT_RED_OFF;
+                              break;
+                   case 0x03: Pattern = SteadyPattern;
+                              procfs_write_buffer[1] = LEFT_ORANGE_ON | LEFT_ORANGE_OFF | RIGHT_ORANGE_ON | RIGHT_ORANGE_OFF;
+                              break;
+                   case 0x04: Pattern = FlashPattern;
+                              procfs_write_buffer[1] = LEFT_GREEN_ON  | LEFT_BLACK_OFF  | RIGHT_GREEN_ON  | RIGHT_BLACK_OFF;
+                              break;
+                   case 0x05: Pattern = FlashPattern;
+                              procfs_write_buffer[1] = LEFT_RED_ON    | LEFT_BLACK_OFF  | RIGHT_RED_ON    | RIGHT_BLACK_OFF;
+                              break;
+                   case 0x06: Pattern = FlashPattern;
+                              procfs_write_buffer[1] = LEFT_ORANGE_ON | LEFT_BLACK_OFF  | RIGHT_ORANGE_ON | RIGHT_BLACK_OFF;
+                              break;
+                   case 0x07: Pattern = PulsePattern;
+                              procfs_write_buffer[1] = LEFT_GREEN_ON  | LEFT_BLACK_OFF  | RIGHT_GREEN_ON  | RIGHT_BLACK_OFF;
+                              break;
+                   case 0x08: Pattern = PulsePattern;
+                              procfs_write_buffer[1] = LEFT_RED_ON    | LEFT_BLACK_OFF  | RIGHT_RED_ON    | RIGHT_BLACK_OFF;
+                              break;
+                   case 0x09: Pattern = PulsePattern;
+                              procfs_write_buffer[1] = LEFT_ORANGE_ON | LEFT_BLACK_OFF  | RIGHT_ORANGE_ON | RIGHT_BLACK_OFF;
+                              break;
+                   default:   Pattern = SteadyPattern;
+                              procfs_write_buffer[1] = LEFT_BLACK_ON | LEFT_BLACK_OFF | RIGHT_BLACK_ON | RIGHT_BLACK_OFF;
+                              break;
+                   }
+        
+        default  : Pattern = SteadyPattern;
+                   procfs_write_buffer[1] = LEFT_BLACK_ON | LEFT_BLACK_OFF | RIGHT_BLACK_ON | RIGHT_BLACK_OFF;
+                   break;
         }
+
+        // Don't allow the timer interrupt to do anything until we're done updating!
+        //
+        PatternBlock  =  1;
+              
+        // Now, set the actual LED patterns that will be used to
+        // update the 4 LEDs in the on and off pattern state.
+        //
+        // Yes it's ugly and could be tableized, but it works and
+        // it's easy to understand - let's leave it alone, shall we?
+
+        switch ( procfs_write_buffer[1] & LEFT_ON_MASK ) {
+                   
+        case LEFT_BLACK_ON :   OnPattern[0]  = ~Pattern;
+                               OnPattern[1]  = ~Pattern;
+                               break;
+        case LEFT_GREEN_ON :   OnPattern[0]  =  Pattern;
+                               OnPattern[1]  = ~Pattern;
+                               break;
+        case LEFT_RED_ON   :   OnPattern[0]  = ~Pattern; 
+                               OnPattern[1]  =  Pattern;
+                               break;
+        case LEFT_ORANGE_ON:   OnPattern[0]  =  Pattern;
+                               OnPattern[1]  =  Pattern;
+                               break;
+        }
+
+        switch ( procfs_write_buffer[1] & LEFT_OFF_MASK ) {
+                   
+        case LEFT_BLACK_OFF :  OffPattern[0] = ~Pattern;
+                               OffPattern[1] = ~Pattern; 
+                               break;                  
+        case LEFT_GREEN_OFF :  OffPattern[0] =  Pattern; 
+                               OffPattern[1] = ~Pattern; 
+                               break;                  
+        case LEFT_RED_OFF   :  OffPattern[0] = ~Pattern; 
+                               OffPattern[1] =  Pattern; 
+                               break;                  
+        case LEFT_ORANGE_OFF:  OffPattern[0] =  Pattern; 
+                               OffPattern[1] =  Pattern; 
+                               break;
+        }
+
+        switch ( procfs_write_buffer[1] & RIGHT_ON_MASK ) {
+                   
+        case RIGHT_BLACK_ON :  OnPattern[2]  = ~Pattern;
+                               OnPattern[3]  = ~Pattern; 
+                               break;                 
+        case RIGHT_GREEN_ON :  OnPattern[2]  =  Pattern; 
+                               OnPattern[3]  = ~Pattern; 
+                               break;                 
+        case RIGHT_RED_ON   :  OnPattern[2]  = ~Pattern; 
+                               OnPattern[3]  =  Pattern; 
+                               break;                 
+        case RIGHT_ORANGE_ON:  OnPattern[2]  =  Pattern; 
+                               OnPattern[3]  =  Pattern; 
+                               break;
+        }
+
+        switch ( procfs_write_buffer[1] & RIGHT_OFF_MASK ) {
+                   
+        case RIGHT_BLACK_OFF : OffPattern[2] = ~Pattern; 
+                               OffPattern[3] = ~Pattern;
+                               break;                    
+        case RIGHT_GREEN_OFF : OffPattern[2] =  Pattern;
+                               OffPattern[3] = ~Pattern;
+                               break;                    
+        case RIGHT_RED_OFF   : OffPattern[2] = ~Pattern;
+                               OffPattern[3] =  Pattern;
+                               break;                    
+        case RIGHT_ORANGE_OFF: OffPattern[2] =  Pattern;
+                               OffPattern[3] =  Pattern;
+                               break;
+        }
+
+        PatternBits   =  20;
+        PatternBit    =  0;
+               
+        PatternBlock  =  0;
  
 	return procfs_write_buffer_size;
 }
@@ -766,9 +1024,9 @@ static int ModuleInit(void)
 //    GpioBase  =  (void*)ioremap(DA8XX_GPIO_BASE,0xD8);
 //    if (GpioBase != NULL)
 //    {
-#ifdef DEBUG
+// #ifdef DEBUG
 //      printk("%s gpio address mapped\n",MODULE_NAME);
-#endif
+// #endif
 
       InitGpio();
 
