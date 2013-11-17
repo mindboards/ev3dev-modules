@@ -1,0 +1,8 @@
+
+obj-m       += ev3dev_ui.o
+
+ccflags-y   := -I../ev3dev-modules/lms2012/util
+ccflags-y   += -I../ev3dev-modules/lms2012/lms2012/source
+
+ev3dev_ui-y := d_ui.o
+ev3dev_ui-y += ../../util/ev3dev_util.o 
