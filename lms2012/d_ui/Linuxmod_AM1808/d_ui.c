@@ -34,7 +34,7 @@
  *
  *  /sys/devices/platform/ev3dev/ui
  *
- *  LED DRIVER OPEATION
+ *  LED DRIVER OPERATION
  *  -------------------
  *
  *  The following files control the operation of the ev3dev_ui LED driver
@@ -80,7 +80,7 @@
  *  
  *  That's all there is to the ev3dev_ui LED driver!
  *  
- *  BUTTON DRIVER OPEATION
+ *  BUTTON DRIVER OPERATION
  *  -----------------------
  *
  *  The following files control the operation of the ev3dev_ui Button driver
@@ -411,15 +411,6 @@ static void ModuleExit(void)
 }
 
 // -----------------------------------------------------------------------
-// Individual LED data along with show/store routines
-
-// static unsigned long ledleft[ 2];
-// static unsigned long ledright[2];
-
-// #define EV3DEV_UI_MAX_PATTERN (20)
-
-// static unsigned char pattern[EV3DEV_UI_MAX_PATTERN + 1];
-// static unsigned int  length;
 
 static ssize_t show_pattern(struct device *dev,
         struct device_attribute *attr, char *buf)
@@ -447,10 +438,10 @@ static ssize_t store_pattern(struct device *dev,
         return( count );
 }
 
-static EV3DEV_MINMAX_ATTR(ledleft0,  0666, ledleft[ 0], 0, 3);
-static EV3DEV_MINMAX_ATTR(ledleft1,  0666, ledleft[ 1], 0, 3);
-static EV3DEV_MINMAX_ATTR(ledright0, 0666, ledright[0], 0, 3);
-static EV3DEV_MINMAX_ATTR(ledright1, 0666, ledright[1], 0, 3);
+static EV3DEV_MINMAX_ATTR(ledleft0,  ledleft0,  0666, ledleft[ 0], 0, 3);
+static EV3DEV_MINMAX_ATTR(ledleft1,  ledleft1,  0666, ledleft[ 1], 0, 3);
+static EV3DEV_MINMAX_ATTR(ledright0, ledright0, 0666, ledright[0], 0, 3);
+static EV3DEV_MINMAX_ATTR(ledright1, ledright1, 0666, ledright[1], 0, 3);
 
 static DEVICE_ATTR(pattern, 0666, show_pattern, store_pattern);
 
@@ -477,45 +468,43 @@ static DEVICE_INT_ATTR(buttonback,  0444, ButtonState[EV3DEV_BUTTON_BACK ]);
 
 static DEVICE_ATTR(buttons, 0444, show_buttons, NULL );
 
-static struct device_attribute *ev3dev_ui_attrs[] = {
-    &dev_attr_ledleft0.attr
-  , &dev_attr_ledleft1.attr
-  , &dev_attr_ledright0.attr
-  , &dev_attr_ledright1.attr
+static struct attribute *ev3dev_ui_attrs[] = {
+    &dev_attr_ledleft0.dev_attr.attr
+  , &dev_attr_ledleft1.dev_attr.attr
+  , &dev_attr_ledright0.dev_attr.attr
+  , &dev_attr_ledright1.dev_attr.attr
   , &dev_attr_pattern.attr
-  , &dev_attr_buttonup.attr
-  , &dev_attr_buttonenter.attr
-  , &dev_attr_buttondown.attr
-  , &dev_attr_buttonright.attr
-  , &dev_attr_buttonleft.attr
-  , &dev_attr_buttonback.attr
+  , &dev_attr_buttonback.attr.attr
+  , &dev_attr_buttonup.attr.attr
+  , &dev_attr_buttonenter.attr.attr
+  , &dev_attr_buttondown.attr.attr
+  , &dev_attr_buttonright.attr.attr
+  , &dev_attr_buttonleft.attr.attr
   , &dev_attr_buttons.attr
   , NULL
 };
 
-static const struct attribute_group ev3dev_ui_attr_group = {
+static struct attribute_group ev3dev_ui_attr_group = {
         .attrs = ev3dev_ui_attrs,
 };
 
 // -----------------------------------------------------------------------
 
-static struct platform_device *ev3dev;
+extern struct platform_device *ev3dev;
 
 static struct platform_device *ui;
 
 static int ev3dev_ui_init(void)
 {
-        int ret;
+        int ret = -ENXIO;
 
-        // FIXME - figure out how to add a glue element context (is it needed?)
+        if ( !ev3dev ) {
+            printk( "ev3dev node is not yet registered, load the ev3dev_ev3dev module\n");
 
-        // vvvv Move this code one function higher up in the process
-        printk("  ui_init ev3dev_register   %08x\n", (unsigned int)(ev3dev));
-        ret = ev3dev_register( &ev3dev );
-        printk("  ui_init ev3dev_register   %08x\n", (unsigned int)(ev3dev));
-        // ^^^^ Move this code one function higher up in the process
+            goto err0; 
+        }
 
-//        ret = -ENOMEM;
+        ret = -ENOMEM;
 
         ui = platform_device_alloc( "ui", -1 );         
         if (!ui) {
@@ -544,6 +533,8 @@ err4:
         platform_device_put( ui );
 
 err1: 
+
+err0: 
         return ret;
 }
 
@@ -555,14 +546,6 @@ static void ev3dev_ui_exit(void)
 
         platform_device_del( ui );
         platform_device_put( ui );
-
-        printk("  ui_exit ev3dev_unregistered %08x\n", (unsigned int)(ev3dev));
-
-        ev3dev_unregister( &ev3dev );
-
-        printk("  ui_exit ev3dev_unregistered %08x\n", (unsigned int)(ev3dev));
-
-
 }
 
 module_init(ev3dev_ui_init);

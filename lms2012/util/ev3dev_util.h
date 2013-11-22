@@ -49,7 +49,7 @@
 #include <linux/device.h>
 
 struct ev3dev_minmax_attribute {
-        struct device_attribute attr;
+        struct device_attribute dev_attr;
         void *var;
         int   min;
         int   max; 
@@ -63,9 +63,9 @@ extern ssize_t ev3dev_show_minmax(struct device *dev,
                                   struct device_attribute *attr,
                                   char *buf);
 
-#define EV3DEV_MINMAX_ATTR(_name, _mode, _var, _min, _max ) \
+#define EV3DEV_MINMAX_ATTR(_name, _fname, _mode, _var, _min, _max ) \
         struct ev3dev_minmax_attribute dev_attr_##_name =   \
-                { __ATTR(_name, _mode, ev3dev_show_minmax, ev3dev_store_minmax), &(_var), _min, _max }
+                { __ATTR(_fname, _mode, ev3dev_show_minmax, ev3dev_store_minmax), &(_var), _min, _max }
 
 extern int  ev3dev_register(  struct platform_device ** );
 extern void ev3dev_unregister(struct platform_device ** );

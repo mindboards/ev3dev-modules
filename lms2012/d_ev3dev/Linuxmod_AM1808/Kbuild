@@ -1,0 +1,7 @@
+obj-m       += $(MOD).o
+
+ccflags-y   := -I../ev3dev-modules/lms2012/util
+ccflags-y   += -I../ev3dev-modules/lms2012/lms2012/source
+
+$(MOD)-y := d_$(MOD).o
+$(MOD)-y += ../../util/ev3dev_util.o 

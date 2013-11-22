@@ -22,17 +22,27 @@
  *
  */
 
-#define   HW_ID_SUPPORT
+#include  "lms2012.h"
+#include  "am1808.h"
 
-#include  "../../lms2012/source/lms2012.h"
-#include  "../../lms2012/source/am1808.h"
+#include <linux/module.h>
+#include <linux/device.h>
+#include <linux/platform_device.h>
+#include <linux/hrtimer.h>
+#include <linux/irq.h>
+#include <asm/gpio.h>
 
-int       Hw         =  0;
-int       HwInvBits  =  0;
+#warning "The foloowing include is only temporary for GetPeripheralBase"
+#include <asm/gpio.h>
 
-#define   MODULE_NAME                   "pwm_module"
-#define   DEVICE1_NAME                  PWM_DEVICE
-#define   DEVICE2_NAME                  MOTOR_DEVICE
+#include <mach/mux.h>
+
+#include "ev3dev_util.h"
+
+#define DEVICE_NAME "ev3dev_pwm"
+
+#define EV3DEV_PWM_OFFSET_VER_MAJOR	0x00
+#define EV3DEV_PWM_OFFSET_VER_MINOR	0x01
 
 
 #define   SOFT_TIMER_MS                 2
@@ -278,32 +288,32 @@ void      SetDutyMB(ULONG Duty);
 void      SetDutyMC(ULONG Duty);
 void      SetDutyMD(ULONG Duty);
 
-#include  <linux/kernel.h>
-#include  <linux/fs.h>
-#include  <linux/signal.h>
-#include  <linux/sched.h>
-
-#ifndef   PCASM
-#include  <linux/ioport.h>
-#include  <asm/gpio.h>
-#include  <asm/uaccess.h>
-#include  <linux/module.h>
-#include  <linux/miscdevice.h>
-
-#include  <linux/mm.h>
-#include  <linux/hrtimer.h>
-
-#include  <linux/init.h>
-#include  <asm/siginfo.h>     //siginfo
-#include  <linux/rcupdate.h>  //rcu_read_lock
-#include  <linux/uaccess.h>
-#include  <linux/debugfs.h>
-
-#include  <asm/io.h>
-#include  <asm/uaccess.h>
-
-#include  <linux/irq.h>
-#include  <linux/interrupt.h>
+// #include  <linux/kernel.h>
+// #include  <linux/fs.h>
+// #include  <linux/signal.h>
+// #include  <linux/sched.h>
+// 
+// #ifndef   PCASM
+// #include  <linux/ioport.h>
+// #include  <asm/gpio.h>
+// #include  <asm/uaccess.h>
+// #include  <linux/module.h>
+// #include  <linux/miscdevice.h>
+// 
+// #include  <linux/mm.h>
+// #include  <linux/hrtimer.h>
+// 
+// #include  <linux/init.h>
+// #include  <asm/siginfo.h>     //siginfo
+// #include  <linux/rcupdate.h>  //rcu_read_lock
+// #include  <linux/uaccess.h>
+// #include  <linux/debugfs.h>
+// 
+// #include  <asm/io.h>
+// #include  <asm/uaccess.h>
+// 
+// #include  <linux/irq.h>
+// #include  <linux/interrupt.h>
 
 // ------------------------------------------------------------------------------
 // Here's where we put the generic includes and defines from the kernel
@@ -314,18 +324,18 @@ void      SetDutyMD(ULONG Duty);
 // as intended here.
 
 
-#include <linux/platform_device.h>
-#include <linux/err.h>
-#include <linux/clk.h>
-#include <linux/io.h>
-#include <linux/pwm/pwm.h>
-#include <linux/pwm/ecap_cap.h>
-#include <linux/slab.h>
-#include <linux/proc_fs.h>
-
-#include <mach/common.h>
-// #include <mach/da8xx.h>
-#include <mach/mux.h>
+// #include <linux/platform_device.h>
+// #include <linux/err.h>
+// #include <linux/clk.h>
+// #include <linux/io.h>
+// #include <linux/pwm/pwm.h>
+// #include <linux/pwm/ecap_cap.h>
+// #include <linux/slab.h>
+// #include <linux/proc_fs.h>
+// 
+// #include <mach/common.h>
+// // #include <mach/da8xx.h>
+// #include <mach/mux.h>
 
 /* eCAP register offsets */
 #define CAP1					0x08
@@ -346,34 +356,34 @@ void      SetDutyMD(ULONG Duty);
 #define OVF_INT					0x20
 #define INT_FLAG_CLR				0x3F
 
-#define PROCFS_MAX_SIZE		20
-#define PROCFS_NAME 		"ev3dev_pwm"
-
-// struct davinci_soc_info *soc_info = &davinci_soc_info;
-// printk(KERN_INFO "%08x \n", soc_info->timer_info->timers[3].base );
-
-
-// static char          procfs_read_buffer[PROCFS_MAX_SIZE];
-// static unsigned long procfs_read_buffer_size = 0;
+// #define PROCFS_MAX_SIZE		20
+// #define PROCFS_NAME 		"ev3dev_pwm"
 // 
-// static char          procfs_write_buffer[PROCFS_MAX_SIZE];
-// static unsigned long procfs_write_buffer_size = 0;
+// // struct davinci_soc_info *soc_info = &davinci_soc_info;
+// // printk(KERN_INFO "%08x \n", soc_info->timer_info->timers[3].base );
+// 
+// 
+// // static char          procfs_read_buffer[PROCFS_MAX_SIZE];
+// // static unsigned long procfs_read_buffer_size = 0;
+// // 
+// // static char          procfs_write_buffer[PROCFS_MAX_SIZE];
+// // static unsigned long procfs_write_buffer_size = 0;
+// 
+// static struct proc_dir_entry *procfs_file;
+// 
+// MODULE_LICENSE("GPL");
+// MODULE_AUTHOR("The LEGO Group");
+// MODULE_DESCRIPTION(MODULE_NAME);
+// MODULE_SUPPORTED_DEVICE(DEVICE1_NAME);
+// 
+// module_init(ModuleInit);
+// module_exit(ModuleExit);
 
-static struct proc_dir_entry *procfs_file;
-
-MODULE_LICENSE("GPL");
-MODULE_AUTHOR("The LEGO Group");
-MODULE_DESCRIPTION(MODULE_NAME);
-MODULE_SUPPORTED_DEVICE(DEVICE1_NAME);
-
-module_init(ModuleInit);
-module_exit(ModuleExit);
-
-#include  <mach/mux.h>
-
-#else
-// Keep Eclipse happy
-#endif
+// #include  <mach/mux.h>
+// 
+// #else
+// // Keep Eclipse happy
+// #endif
 
 
 enum      OutputPortPins
@@ -390,8 +400,8 @@ enum      OutputPortPins
 
 #define   IRQA_PINNO                  (PWM_OUTPUTA_INT)
 #define   IRQB_PINNO                  (PWM_OUTPUTB_INT)
-#define   IRQC_PINNO                  (PWM_OUTPUTB_INT)
-#define   IRQD_PINNO                  (PWM_OUTPUTB_INT)
+#define   IRQC_PINNO                  (PWM_OUTPUTC_INT)
+#define   IRQD_PINNO                  (PWM_OUTPUTD_INT)
 
 // /* EP2 hardware have sanyo motor driver */
 // INPIN     EP2_OutputPortPin[][OUTPUT_PORT_PINS] =
@@ -557,6 +567,30 @@ enum      OutputPortPins
 #define PWM_OUTPUTD_SLEEPCD  	(-1)
 #define PWM_OUTPUTD_FAULTCD  	(-1)
 
+#define EV3_OUTPUTA_PWM   EV3_EPWM1B
+#define EV3_OUTPUTA_DIR0  EV3_GPIO3_15
+#define EV3_OUTPUTA_DIR1  EV3_GPIO3_6
+#define EV3_OUTPUTA_INT   EV3_GPIO5_11
+#define EV3_OUTPUTA_DIRA  EV3_GPIO0_4
+
+#define EV3_OUTPUTB_PWM   EV3_EPWM1A
+#define EV3_OUTPUTB_DIR0  EV3_GPIO2_1
+#define EV3_OUTPUTB_DIR1  EV3_GPIO0_3
+#define EV3_OUTPUTB_INT   EV3_GPIO5_8
+#define EV3_OUTPUTB_DIRA  EV3_GPIO2_9
+
+#define EV3_OUTPUTC_PWM   EV3_APWM0
+#define EV3_OUTPUTC_DIR0  EV3_GPIO6_8
+#define EV3_OUTPUTC_DIR1  EV3_GPIO5_9
+#define EV3_OUTPUTC_INT   EV3_GPIO5_13
+#define EV3_OUTPUTC_DIRA  EV3_GPIO3_14
+
+#define EV3_OUTPUTD_PWM   EV3_APWM1
+#define EV3_OUTPUTD_DIR0  EV3_GPIO5_3
+#define EV3_OUTPUTD_DIR1  EV3_GPIO5_10
+#define EV3_OUTPUTD_INT   EV3_GPIO6_9
+#define EV3_OUTPUTD_DIRA  EV3_GPIO2_8
+
 static const int legoev3_pwm_gpio[][OUTPUT_PORT_PINS]  = {
   { PWM_OUTPUTA_PWM       // Output port A
   , PWM_OUTPUTA_DIR0
@@ -591,9 +625,6 @@ static const int legoev3_pwm_gpio[][OUTPUT_PORT_PINS]  = {
   , PWM_OUTPUTD_FAULTCD
   }
 };
-
-
-
 
 static const short legoev3_outputA_pins[] = {
     EV3_OUTPUTA_PWM       // Output port A
@@ -1724,9 +1755,9 @@ static enum hrtimer_restart Device1TimerInterrupt1(struct hrtimer *pTimer)
   static SLONG volatile Tmp;
 
   hrtimer_forward_now(pTimer,Device1Time);
-//for (No = 0; No < NO_OF_OUTPUT_PORTS; No++)
+for (No = 0; No < NO_OF_OUTPUT_PORTS; No++)
 //while( 0 )
-  for (No = 0; No < 1; No++)
+//  for (No = 0; No < 1; No++)
   {
     TmpTacho = Motor[No].IrqTacho;
     Tmp      = (TmpTacho - Motor[No].OldTachoCnt);
@@ -2404,35 +2435,8 @@ void      CheckforEndOfSync(void)
  *  Default state:        TBD
  */
 // static ssize_t Device1Write(struct file *File,const char *Buffer,size_t Count,loff_t *Data)
-
-int
-procfile_write(struct file *file, const char *buffer, unsigned long count,
-		   void *data)
+static void pwm_command_handler(const signed char *Buf)
 {
-
-  unsigned char Buf[20];
-  int     Lng = 0;
-
-  unsigned int idx;
-
-  /* get buffer size */
-  Lng = count;
-
-  if (Lng > sizeof(Buf) ) {
-      	Lng = sizeof(Buf);
-  }
-
-  memset(Buf, 0, sizeof(Buf));
-
-  /* write data to the buffer */
-  if ( copy_from_user(Buf, buffer, Lng) ) {
-   	return -EFAULT;
-  }
-
-  // copy_from_user(Buf,Buffer,Count);
-
-  printk("Count: %02d Command: %02x %02x %02x %02x %0x2\n", count, Buf[0], Buf[1], Buf[2], Buf[3], Buf[4] );
-
   switch((UBYTE)(Buf[0]))
   {
 
@@ -3297,28 +3301,10 @@ procfile_write(struct file *file, const char *buffer, unsigned long count,
     break;
   }
 
-  return (Lng);
 }
 
 
 // static ssize_t Device1Read(struct file *File,char *Buffer,size_t Count,loff_t *Offset)
-
-int
-procfile_read(char *buffer,
-	      char **buffer_location,
-	      off_t offset, int buffer_length, int *eof, void *data)
-{
-  int Lng     = 0;
-
-  if (offset > 0) {
-      Lng = 0;
-  } else {
-      Lng = snprintf( &buffer[0], buffer_length, "Irq/Tacho/Dir/Speed -> %d/%d/%d/%d Timer ->%u\n", Motor[0].IrqTacho, Motor[0].TachoCnt, Motor[0].Direction, Motor[0].Speed, FREERunning24bittimer);
-  }
-
-  return (Lng);
-}
-
 
 // static    const struct file_operations Device1Entries =
 // {
@@ -3336,21 +3322,24 @@ procfile_read(char *buffer,
 // };
 
 
-/*! \page PwmModule
- *
- *  <hr size="1"/>
- *  <b>     write </b>
- *
- */
-/*! \brief    GetPeriphealBasePtr
- *
- *  Helper function for getting the peripheal HW base address
- *
- */
+// /*! \page PwmModule
+//  *
+//  *  <hr size="1"/>
+//  *  <b>     write </b>
+//  *
+//  */
+// /*! \brief    GetPeriphealBasePtr
+//  *
+//  *  Helper function for getting the peripheal HW base address
+//  *
+//  */
+#warning "Use proper kernel methods for this - see the pullup update in d_ui.c"
+
 void    GetPeriphealBasePtr(ULONG Address, ULONG Size, ULONG **Ptr)
 {
   /* eCAP0 pointer */
-  if (request_mem_region(Address,Size,MODULE_NAME) >= 0)
+//if (request_mem_region(Address,Size,MODULE_NAME) >= 0)
+  if (request_mem_region(Address,Size,"foo_pwm") >= 0)
   {
 
     *Ptr  =  (ULONG*)ioremap(Address,Size);
@@ -3358,7 +3347,8 @@ void    GetPeriphealBasePtr(ULONG Address, ULONG Size, ULONG **Ptr)
     if (*Ptr != NULL)
     {
 // #ifdef DEBUG
-      printk("%s memory Remapped from 0x%08lX to 0x%08lX\n",DEVICE1_NAME,Address,(unsigned long)*Ptr);
+//    printk("%s memory Remapped from 0x%08lX to 0x%08lX\n",DEVICE1_NAME,Address,(unsigned long)*Ptr);
+      printk("%s memory Remapped from 0x%08lX to 0x%08lX\n","bar_pwm",Address,(unsigned long)*Ptr);
 // #endif
     }
     else
@@ -3386,6 +3376,8 @@ static int Device1Init(void)
 {
   int     Result = -1;
   UBYTE   Tmp;
+
+#warning "Update this mess to use proper kernel methods instead of iomaps!"
 
     GetPeriphealBasePtr(0x01C14000, 0x190, (ULONG**)&SYSCFG0);  /* SYSCFG0 pointer    */
 //  GetPeriphealBasePtr(0x01E2C000, 0x1C,  (ULONG**)&SYSCFG1);  /* SYSCFG1 pointer    */
@@ -3457,9 +3449,9 @@ static int Device1Init(void)
     /* Setup interrupt for the tacho int pins */
 // FIXME if you ever want interrupts for IRQs
     SetGpioAnyEdgeIrq(IRQA_PINNO, IntA);
-//  SetGpioAnyEdgeIrq(IRQB_PINNO, IntB);
-//  SetGpioAnyEdgeIrq(IRQC_PINNO, IntC);
-//  SetGpioAnyEdgeIrq(IRQD_PINNO, IntD);
+    SetGpioAnyEdgeIrq(IRQB_PINNO, IntB);
+    SetGpioAnyEdgeIrq(IRQC_PINNO, IntC);
+    SetGpioAnyEdgeIrq(IRQD_PINNO, IntD);
 //  }
   return (Result);
 }
@@ -4387,9 +4379,9 @@ UBYTE     dCalculateSpeed(UBYTE No, SBYTE *pSpeed)
 
 static int Device2Init(void)
 {
-  int       Result = -1;
-  int       i;
-  MOTORDATA *pTmp;
+  int       Result = 0;
+//   int       i;
+//  MOTORDATA *pTmp;
 
 //  Result  =  misc_register(&Device2);
 //  if (Result)
@@ -4425,8 +4417,8 @@ static int Device2Init(void)
 
 static void Device2Exit(void)
 {
-  MOTORDATA   *pTmp;
-  int         i;
+//  MOTORDATA   *pTmp;
+//  int         i;
 
 //  pTmp    =  pMotor;
 //  pMotor  =  MotorData;
@@ -4447,59 +4439,59 @@ static void Device2Exit(void)
 }
 
 // MODULE *********************************************************************
-int
-procfile_init( void )
-{
-	/* create the /proc file */
-	procfs_file = create_proc_entry(PROCFS_NAME, 0, NULL);
-	
-	if (procfs_file == NULL) {
-		remove_proc_entry(PROCFS_NAME, NULL);
-		printk(KERN_ALERT "Error: Could not initialize /proc/%s\n",
-			PROCFS_NAME);
-		return -ENOMEM;
-	}
+// int
+// procfile_init( void )
+// {
+// 	/* create the /proc file */
+// 	procfs_file = create_proc_entry(PROCFS_NAME, 0, NULL);
+// 	
+// 	if (procfs_file == NULL) {
+// 		remove_proc_entry(PROCFS_NAME, NULL);
+// 		printk(KERN_ALERT "Error: Could not initialize /proc/%s\n",
+// 			PROCFS_NAME);
+// 		return -ENOMEM;
+// 	}
+// 
+// 	procfs_file->read_proc  = procfile_read;
+// 	procfs_file->write_proc = procfile_write;
+// 	procfs_file->mode 	  = S_IFREG | S_IRUGO | S_IWUGO;
+// 	procfs_file->uid 	  = 0;
+// 	procfs_file->gid 	  = 0;
+// 	procfs_file->size 	  = PROCFS_MAX_SIZE;
+// 
+// 	printk(KERN_INFO "/proc/%s created\n", PROCFS_NAME);	
+// 	return 0;	/* everything is ok */
+// }
+// 
+// void
+// procfile_exit( void )
+// {
+// 	remove_proc_entry(PROCFS_NAME, NULL);
+// 	printk(KERN_INFO "/proc/%s removed\n", PROCFS_NAME);
+// }
+// 
+// 
 
-	procfs_file->read_proc  = procfile_read;
-	procfs_file->write_proc = procfile_write;
-	procfs_file->mode 	  = S_IFREG | S_IRUGO | S_IWUGO;
-	procfs_file->uid 	  = 0;
-	procfs_file->gid 	  = 0;
-	procfs_file->size 	  = PROCFS_MAX_SIZE;
-
-	printk(KERN_INFO "/proc/%s created\n", PROCFS_NAME);	
-	return 0;	/* everything is ok */
-}
-
-void
-procfile_exit( void )
-{
-	remove_proc_entry(PROCFS_NAME, NULL);
-	printk(KERN_INFO "/proc/%s removed\n", PROCFS_NAME);
-}
-
-
-
-#ifndef PCASM
-module_param (HwId, charp, 0);
-#endif
+// #ifndef PCASM
+// module_param (HwId, charp, 0);
+// #endif
 
 static int ModuleInit(void)
 {
-  Hw  =  HWID;
-
-  if (Hw < PLATFORM_START)
-  {
-    Hw  =  PLATFORM_START;
-  }
-  if (Hw > PLATFORM_END)
-  {
-    Hw  =  PLATFORM_END;
-  }
+// 1  Hw  =  HWID;
+// 1
+// 1  if (Hw < PLATFORM_START)
+// 1  {
+// 1    Hw  =  PLATFORM_START;
+// 1  }
+// 1  if (Hw > PLATFORM_END)
+// 1  {
+// 1    Hw  =  PLATFORM_END;
+// 1  }
 
 // #ifdef DEBUG
-  printk(KERN_INFO "HW %s init started\n",MODULE_NAME);
-  printk(KERN_INFO "Hw is %d\n",Hw);
+  printk(KERN_INFO "HW %s init started\n","ev3dev_pwm");
+// 1  printk(KERN_INFO "Hw is %d\n",Hw);
 // #endif
 
 //  if (request_mem_region(DA8XX_GPIO_BASE,0xD8,MODULE_NAME) >= 0)
@@ -4517,13 +4509,13 @@ static int ModuleInit(void)
 //        {
           /* This is to comply with changing of inverters on the tacho direction pins */
           /* only Final hardware does not need to be inverted                         */
-          HwInvBits = 0xFFFFFFFF;
+//    HwInvBits = 0xFFFFFFFF;
 
           /* Motor PWM outputs has been switched in EP2 MA<->MB and MC<->MD */
-          SetDuty[0]  = SetDutyMB;
-          SetDuty[1]  = SetDutyMA;
-          SetDuty[2]  = SetDutyMD;
-          SetDuty[3]  = SetDutyMC;
+      SetDuty[0]  = SetDutyMB;
+      SetDuty[1]  = SetDutyMA;
+      SetDuty[2]  = SetDutyMD;
+      SetDuty[3]  = SetDutyMC;
 //        }
 //        break;
 //        case FINALB:
@@ -4554,45 +4546,36 @@ static int ModuleInit(void)
 //        break;
 //      }
 //
-        InitGpio();
+    InitGpio();
 
-        procfile_init();
+//      procfile_init();
 
-        Device1Init();
-        Device2Init();
+    Device1Init();
+    Device2Init();
 
         /* Setup timer irq*/
-        Device1Time  =  ktime_set(0,SOFT_TIMER_SETUP);
-        hrtimer_init(&Device1Timer,CLOCK_MONOTONIC,HRTIMER_MODE_REL);
-        Device1Timer.function  =  Device1TimerInterrupt1;
-        hrtimer_start(&Device1Timer,Device1Time,HRTIMER_MODE_REL);
+    Device1Time  =  ktime_set(0,SOFT_TIMER_SETUP);
+    hrtimer_init(&Device1Timer,CLOCK_MONOTONIC,HRTIMER_MODE_REL);
+    Device1Timer.function  =  Device1TimerInterrupt1;
+    hrtimer_start(&Device1Timer,Device1Time,HRTIMER_MODE_REL);
  
-//        SETMotorType(0, TYPE_TACHO);
-//        Motor[0].TargetPower  = 10;
-//        Motor[0].TargetSpeed  = 10;
-//        Motor[0].TargetState = UNLIMITED_REG;
-//        Motor[0].State = UNLIMITED_REG;
-//    }
-//  }
   return (0);
 }
 
 
 static void ModuleExit(void)
 {
-#ifdef DEBUG
-  printk("%s exit started\n",MODULE_NAME);
-#endif
+  printk("ev3dev_pwm exit started\n");
     STOPPwm;
 // FIXME if you want to unload irqs when module is unloaded
     free_irq(gpio_to_irq(IRQA_PINNO), NULL);
-//  free_irq(gpio_to_irq(IRQB_PINNO), NULL);
-//  free_irq(gpio_to_irq(IRQC_PINNO), NULL);
-//  free_irq(gpio_to_irq(IRQD_PINNO), NULL);
+    free_irq(gpio_to_irq(IRQB_PINNO), NULL);
+    free_irq(gpio_to_irq(IRQC_PINNO), NULL);
+    free_irq(gpio_to_irq(IRQD_PINNO), NULL);
 
-    Device1Exit();
-  Device2Exit();
-  procfile_exit();
+   Device1Exit();
+   Device2Exit();
+// 1  procfile_exit();
 
   FreeGpio();
 
@@ -4600,6 +4583,329 @@ static void ModuleExit(void)
 
 }
 
+// -----------------------------------------------------------------------
+
+#warning "The value 16 is the max number of bytes in a MOTORDATA, STEPPOWER, TIMEPOWER, STEPSPEED, STEPSYNC, or TIMESYNC command"
+#warning "See if we can se the buffer size programmatically!"
+
+struct ev3dev_pwm_command_attribute {
+        struct device_attribute dev_attr;
+        void *var;
+        signed char buf[16];
+};
+
+#define to_ev3dev_pwm_command_attr(x) container_of(x, struct ev3dev_pwm_command_attribute, dev_attr)
 
 
+static ssize_t show_pwm_command(struct device *dev,
+        struct device_attribute *attr, char *buf)
+{
+        struct ev3dev_pwm_command_attribute *ea = to_ev3dev_pwm_command_attr(attr);
 
+        return snprintf( buf, PAGE_SIZE, "%d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d\n", ea->buf[ 0]
+                                                                                            , ea->buf[ 1]
+                                                                                            , ea->buf[ 2]
+                                                                                            , ea->buf[ 3]
+                                                                                            , ea->buf[ 4]
+                                                                                            , ea->buf[ 5]
+                                                                                            , ea->buf[ 6]
+                                                                                            , ea->buf[ 7]
+                                                                                            , ea->buf[ 8]
+                                                                                            , ea->buf[ 9]
+                                                                                            , ea->buf[10]
+                                                                                            , ea->buf[11]
+                                                                                            , ea->buf[12]
+                                                                                            , ea->buf[13]
+                                                                                            , ea->buf[14]
+                                                                                            , ea->buf[15] );
+}
+
+static ssize_t store_pwm_command(struct device *dev,
+        struct device_attribute *attr, const char *buf, size_t count)
+{
+        int i;
+        long val;
+
+        struct ev3dev_pwm_command_attribute *ea = to_ev3dev_pwm_command_attr(attr);
+
+        const char *start = buf;
+              char *end   = buf;
+        const char *last  = buf + count;
+
+        memset( ea->buf, 0, 16 );
+
+        for ( i=0; i<16; i++ ) {
+
+                 start = skip_spaces( end );
+
+                 if ( last <= start ) {
+                     break;
+                 }
+
+                 val = simple_strtol(start, &end, 0);
+
+                 if ( end == start ) {
+                     return -EINVAL;
+                 }
+
+                 ea->buf[i] = val & 0xFF;
+        }
+
+        pwm_command_handler( (const char *)(ea->buf) );
+
+        return( count );
+}
+
+#define EV3DEV_PWM_COMMAND_ATTR(_name, _fname, _mode, _var ) \
+        struct ev3dev_pwm_command_attribute dev_attr_##_name =   \
+                { __ATTR(_fname, _mode, show_pwm_command, store_pwm_command), .var = &(_var) }
+
+
+// -----------------------------------------------------------------------
+static struct platform_device *ev3dev_pwm_motor[4];
+
+static unsigned char *motor_name[4] = { "motorA", "motorB", "motorC", "motorD" };
+
+static struct {
+    int enable;
+    int type;
+    int command;
+    int power;
+    int speed;
+    int polarity;
+    int counts;
+    int time;
+    int sync;
+} motor_data[4];
+
+#warning "Add #defines to limit min/max range for these attributes ie TYPE_TACHO to TYPE_NEWTACHO"
+
+static EV3DEV_MINMAX_ATTR( enableA  , enable  , 0666, motor_data[0].enable,         0,  1      );
+static EV3DEV_MINMAX_ATTR( typeA    , type    , 0666, motor_data[0].type,           7,  9      );
+static EV3DEV_MINMAX_ATTR( powerA   , power   , 0666, motor_data[0].power,       -100, 100     );
+static EV3DEV_MINMAX_ATTR( speedA   , speed   , 0666, motor_data[0].speed,       -100, 100     );
+static EV3DEV_MINMAX_ATTR( polarityA, polarity, 0666, motor_data[0].polarity,       0, 1       );
+static EV3DEV_MINMAX_ATTR( countsA  , counts  , 0666, motor_data[0].counts,   INT_MIN, INT_MAX );
+static EV3DEV_MINMAX_ATTR( timeA    , time    , 0666, motor_data[0].time,           0, INT_MAX );
+static EV3DEV_MINMAX_ATTR( syncA    , sync    , 0666, motor_data[0].sync,           0, 0       );
+
+static EV3DEV_MINMAX_ATTR( enableB  , enable  , 0666, motor_data[1].enable,         0,  1      );
+static EV3DEV_MINMAX_ATTR( typeB    , type    , 0666, motor_data[1].type,           7,  9      );
+static EV3DEV_MINMAX_ATTR( powerB   , power   , 0666, motor_data[1].power,       -100, 100     );
+static EV3DEV_MINMAX_ATTR( speedB   , speed   , 0666, motor_data[1].speed,       -100, 100     );
+static EV3DEV_MINMAX_ATTR( polarityB, polarity, 0666, motor_data[1].polarity,       0, 1       );
+static EV3DEV_MINMAX_ATTR( countsB  , counts  , 0666, motor_data[1].counts,   INT_MIN, INT_MAX );
+static EV3DEV_MINMAX_ATTR( timeB    , time    , 0666, motor_data[1].time,           0, INT_MAX );
+static EV3DEV_MINMAX_ATTR( syncB    , sync    , 0666, motor_data[1].sync,           0, 0       );
+
+static EV3DEV_MINMAX_ATTR( enableC  , enable  , 0666, motor_data[2].enable,         0,  1      );
+static EV3DEV_MINMAX_ATTR( typeC    , type    , 0666, motor_data[2].type,           7,  9      );
+static EV3DEV_MINMAX_ATTR( powerC   , power   , 0666, motor_data[2].power,       -100, 100     );
+static EV3DEV_MINMAX_ATTR( speedC   , speed   , 0666, motor_data[2].speed,       -100, 100     );
+static EV3DEV_MINMAX_ATTR( polarityC, polarity, 0666, motor_data[2].polarity,       0, 1       );
+static EV3DEV_MINMAX_ATTR( countsC  , counts  , 0666, motor_data[2].counts,   INT_MIN, INT_MAX );
+static EV3DEV_MINMAX_ATTR( timeC    , time    , 0666, motor_data[2].time,           0, INT_MAX );
+static EV3DEV_MINMAX_ATTR( syncC    , sync    , 0666, motor_data[2].sync,           0, 0       );
+
+static EV3DEV_MINMAX_ATTR( enableD  , enable  , 0666, motor_data[3].enable,         0,  1      );
+static EV3DEV_MINMAX_ATTR( typeD    , type    , 0666, motor_data[3].type,           7,  9      );
+static EV3DEV_MINMAX_ATTR( powerD   , power   , 0666, motor_data[3].power,       -100, 100     );
+static EV3DEV_MINMAX_ATTR( speedD   , speed   , 0666, motor_data[3].speed,       -100, 100     );
+static EV3DEV_MINMAX_ATTR( polarityD, polarity, 0666, motor_data[3].polarity,       0, 1       );
+static EV3DEV_MINMAX_ATTR( countsD  , counts  , 0666, motor_data[3].counts,   INT_MIN, INT_MAX );
+static EV3DEV_MINMAX_ATTR( timeD    , time    , 0666, motor_data[3].time,           0, INT_MAX );
+static EV3DEV_MINMAX_ATTR( syncD    , sync    , 0666, motor_data[3].sync,           0, 0       );
+
+static EV3DEV_PWM_COMMAND_ATTR( commandA , command , 0666, motor_data[0].command  );
+static EV3DEV_PWM_COMMAND_ATTR( commandB , command , 0666, motor_data[1].command  );
+static EV3DEV_PWM_COMMAND_ATTR( commandC , command , 0666, motor_data[2].command  );
+static EV3DEV_PWM_COMMAND_ATTR( commandD , command , 0666, motor_data[3].command  );
+
+static struct attribute *ev3dev_pwm_motorA_attrs[] = {
+      &dev_attr_enableA.dev_attr.attr,
+      &dev_attr_typeA.dev_attr.attr,
+      &dev_attr_commandA.dev_attr.attr,
+      &dev_attr_powerA.dev_attr.attr,
+      &dev_attr_speedA.dev_attr.attr,
+      &dev_attr_polarityA.dev_attr.attr,
+      &dev_attr_countsA.dev_attr.attr,
+      &dev_attr_timeA.dev_attr.attr,
+      &dev_attr_syncA.dev_attr.attr,
+      NULL,
+  };
+
+static struct attribute *ev3dev_pwm_motorB_attrs[] = {
+      &dev_attr_enableB.dev_attr.attr,
+      &dev_attr_typeB.dev_attr.attr,
+      &dev_attr_commandB.dev_attr.attr,
+      &dev_attr_powerB.dev_attr.attr,
+      &dev_attr_speedB.dev_attr.attr,
+      &dev_attr_polarityB.dev_attr.attr,
+      &dev_attr_countsB.dev_attr.attr,
+      &dev_attr_timeB.dev_attr.attr,
+      &dev_attr_syncB.dev_attr.attr,
+      NULL,
+  };
+
+static struct attribute *ev3dev_pwm_motorC_attrs[] = {
+      &dev_attr_enableC.dev_attr.attr,
+      &dev_attr_typeC.dev_attr.attr,
+      &dev_attr_commandC.dev_attr.attr,
+      &dev_attr_powerC.dev_attr.attr,
+      &dev_attr_speedC.dev_attr.attr,
+      &dev_attr_polarityC.dev_attr.attr,
+      &dev_attr_countsC.dev_attr.attr,
+      &dev_attr_timeC.dev_attr.attr,
+      &dev_attr_syncC.dev_attr.attr,
+      NULL,
+  };
+
+static struct attribute *ev3dev_pwm_motorD_attrs[] = {
+      &dev_attr_enableD.dev_attr.attr,
+      &dev_attr_typeD.dev_attr.attr,
+      &dev_attr_commandD.dev_attr.attr,
+      &dev_attr_powerD.dev_attr.attr,
+      &dev_attr_speedD.dev_attr.attr,
+      &dev_attr_polarityD.dev_attr.attr,
+      &dev_attr_countsD.dev_attr.attr,
+      &dev_attr_timeD.dev_attr.attr,
+      &dev_attr_syncD.dev_attr.attr,
+      NULL
+  };
+
+static const struct attribute_group ev3dev_pwm_motorA_attr_group = {
+        .attrs = ev3dev_pwm_motorA_attrs,
+};
+
+static const struct attribute_group ev3dev_pwm_motorB_attr_group = {
+        .attrs = ev3dev_pwm_motorB_attrs,
+};
+
+static const struct attribute_group ev3dev_pwm_motorC_attr_group = {
+        .attrs = ev3dev_pwm_motorC_attrs,
+};
+static const struct attribute_group ev3dev_pwm_motorD_attr_group = {
+        .attrs = ev3dev_pwm_motorD_attrs,
+};
+
+static const struct attribute_group *ev3dev_pwm_motor_attr_groups[] = {
+        &ev3dev_pwm_motorA_attr_group,
+        &ev3dev_pwm_motorB_attr_group,
+        &ev3dev_pwm_motorC_attr_group,
+        &ev3dev_pwm_motorD_attr_group,
+        NULL,
+};
+
+extern struct platform_device *ev3dev;
+
+static struct platform_device *pwm;
+
+
+static int ev3dev_pwm_init(void)
+{
+        int ret;
+        int i;
+
+        if ( !ev3dev ) {
+            printk( "ev3dev node is not yet registered, load the ev3dev_ev3dev module\n");
+
+            goto err0; 
+        }
+
+        ret = -ENOMEM;
+
+        pwm = platform_device_alloc( "pwm", -1 );         
+        if (!pwm) {
+                printk( KERN_CRIT "failed to allocate ev3dev\\pwm device\n");
+                goto err1;
+        }
+
+        printk("  pwm_init pwm allocated  %08x\n", (unsigned int)(pwm));
+
+        pwm->dev.parent     = &ev3dev->dev;
+
+        ret = platform_device_add(pwm);
+        if (ret) {
+                printk( "failed to register pwm device\n");
+                goto err4;
+        }
+
+        for ( i=0; i<4; ++i ) {
+            ev3dev_pwm_motor[i] = platform_device_alloc( motor_name[i], -1 );         
+
+            if( !ev3dev_pwm_motor[i] ) {
+                printk( "failed to allocate motor device\n");
+                goto err5;
+            }
+                
+        }
+
+        for ( i=0; i<4; ++i ) {
+            ev3dev_pwm_motor[i]->dev.parent = &pwm->dev;
+
+            ret = platform_device_add(ev3dev_pwm_motor[i]);
+
+            if (ret) {
+                printk( "failed to add pwm/motor device\n");
+                goto err6;
+            }
+        }
+
+        for ( i=0; i<4; ++i ) {
+            ret = sysfs_create_group( &ev3dev_pwm_motor[i]->dev.kobj, ev3dev_pwm_motor_attr_groups[i] );
+            if (ret) {
+                printk( "failed to add pwm/motor attributes\n");
+                goto err7;
+            }
+        }
+
+        ModuleInit();
+        
+        return 0;
+
+err7:   while( --i >= 0 ) {
+            sysfs_remove_group( &ev3dev_pwm_motor[i]->dev.kobj, ev3dev_pwm_motor_attr_groups[i] );
+        }
+
+        i = 5;  // Make sure we unroll the device adds when we fall through!
+
+err6:   while( --i >= 0 ) {
+            platform_device_del( ev3dev_pwm_motor[i] );
+        }
+
+        i = 5;  // Make sure we unroll the allocates when we fall through!
+
+err5:   while( --i >= 0 ) {
+            platform_device_put( ev3dev_pwm_motor[i] );
+        }
+
+err4: 
+        platform_device_put( pwm );
+
+err1: 
+err0: 
+        return ret;
+}
+
+static void ev3dev_pwm_exit(void)
+{
+        int i;
+
+        ModuleExit();
+
+        for ( i=0; i<4; ++i ) {
+            sysfs_remove_group(  &ev3dev_pwm_motor[i]->dev.kobj, ev3dev_pwm_motor_attr_groups[i] );
+            platform_device_del( ev3dev_pwm_motor[i] );
+            platform_device_put( ev3dev_pwm_motor[i] );
+        }
+
+        platform_device_del( pwm );
+        platform_device_put( pwm );
+}
+
+module_init(ev3dev_pwm_init);
+module_exit(ev3dev_pwm_exit)
+
+MODULE_AUTHOR("Ralph Hempel <rhempel@hempeldesigngroup.com>");
+MODULE_DESCRIPTION("Driver for LEGO MINDSTORMS EV3 pwm Device");
+MODULE_LICENSE("GPL");

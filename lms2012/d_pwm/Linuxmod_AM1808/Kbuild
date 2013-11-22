@@ -7,3 +7,4 @@ ccflags-y   += -I../ev3dev-modules/lms2012/lms2012/source
 
 ev3dev_$(MOD)-y := d_$(MOD).o
 ev3dev_$(MOD)-y += ../../util/ev3dev_util.o 
+
